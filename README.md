@@ -1,1 +1,0 @@
-# siv-acta-procedimiento
