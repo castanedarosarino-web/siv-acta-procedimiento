@@ -1,5 +1,5 @@
 streamlit==1.32.2
-fpdf==1.7.2
 fpdf2==2.7.8
-pillow==10.2.0
+Pillow==10.4.0
 streamlit-drawable-canvas==0.9.3
+numpy==1.26.4
