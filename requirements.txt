@@ -1,5 +1,0 @@
-streamlit
-fpdf
-fpdf2
-pillow
-streamlit-drawable-canvas
