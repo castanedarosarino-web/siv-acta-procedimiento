@@ -4,13 +4,11 @@ from datetime import datetime
 
 st.set_page_config(page_title="SVI - Acta de Procedimiento", layout="wide", page_icon="🚔")
 
-# =====================================================
-# AUTOGUARDADO EN MEMORIA ENTRE BLOQUES
-# Evita que Streamlit borre datos al navegar entre paginas.
-# =====================================================
-for _k in list(st.session_state.keys()):
-    st.session_state[_k] = st.session_state[_k]
+from siv_guardado import iniciar_guardado_seguro, panel_guardado_seguro, autoguardar_bloque
 
+BLOQUE_ID = "BLOQUE_1_CORAZON"
+iniciar_guardado_seguro(BLOQUE_ID)
+panel_guardado_seguro(BLOQUE_ID)
 
 st.markdown("""
     <style>
@@ -325,3 +323,9 @@ with st.container():
             mime="application/json",
             use_container_width=True
         )
+
+# Guardado automático del bloque al finalizar la corrida
+try:
+    autoguardar_bloque(BLOQUE_ID)
+except Exception:
+    pass
