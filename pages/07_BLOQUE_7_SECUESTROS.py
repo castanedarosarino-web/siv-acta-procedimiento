@@ -5,13 +5,25 @@ from streamlit_drawable_canvas import st_canvas
 from PIL import Image
 import io
 import datetime
+import tempfile
+import os
 
 from siv_guardado import iniciar_guardado_seguro, panel_guardado_seguro, autoguardar_bloque
+
+# =====================================================
+# BLOQUE 7 - SECUESTROS
+# Version mejorada:
+# - Lista de elementos secuestrados.
+# - Agrupacion de elementos por acta.
+# - Cada acta exige testigo, lugar, hora y firma.
+# - Exporta JSON completo para BLOQUE 8.
+# =====================================================
+
+st.set_page_config(page_title="S.I.V. - Bloque 7 Secuestros", layout="wide", page_icon="📦")
 
 BLOQUE_ID = "BLOQUE_7_SECUESTROS"
 iniciar_guardado_seguro(BLOQUE_ID)
 panel_guardado_seguro(BLOQUE_ID)
-
 
 ELEMENTOS_NO_MANIPULAR = [
     "arma", "pistola", "revólver", "revolver", "escopeta",
@@ -26,371 +38,375 @@ ELEMENTOS_NO_MANIPULAR = [
 
 
 def detectar_no_manipular(texto):
-    texto = texto.lower()
+    texto = str(texto or "").lower()
     return any(palabra in texto for palabra in ELEMENTOS_NO_MANIPULAR)
 
 
-def convertir_firma_a_bytes(canvas_result):
-    if canvas_result.image_data is not None:
-        img = Image.fromarray(canvas_result.image_data.astype("uint8"))
-        buffer = io.BytesIO()
-        img.save(buffer, format="PNG")
-        buffer.seek(0)
-        return buffer
-    return None
+def limpiar_pdf(texto):
+    if texto is None:
+        return ""
+    reemplazos = {
+        "á": "a", "é": "e", "í": "i", "ó": "o", "ú": "u",
+        "Á": "A", "É": "E", "Í": "I", "Ó": "O", "Ú": "U",
+        "ñ": "n", "Ñ": "N", "°": "Nro.", "–": "-", "—": "-",
+        "“": '"', "”": '"', "’": "'", "✅": "", "⚠️": "", "🚨": ""
+    }
+    texto = str(texto)
+    for k, v in reemplazos.items():
+        texto = texto.replace(k, v)
+    return texto
 
 
-def generar_pdf_bloque_7(datos, firma_testigo=None):
+def pdf_bytes(pdf):
+    salida = pdf.output(dest="S")
+    if isinstance(salida, str):
+        return salida.encode("latin-1", errors="replace")
+    return bytes(salida)
+
+
+def convertir_firma_temp(canvas_result):
+    if canvas_result is None or canvas_result.image_data is None:
+        return None
+
+    img = Image.fromarray(canvas_result.image_data.astype("uint8"), "RGBA")
+    blanco = Image.new("RGB", img.size, (255, 255, 255))
+    blanco.paste(img, mask=img.split()[3])
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
+    blanco.save(tmp.name, format="JPEG")
+    return tmp.name
+
+
+def elemento_label(e, idx=None):
+    pref = f"{idx}. " if idx is not None else ""
+    tipo = e.get("tipo_elemento", "Elemento")
+    desc = e.get("descripcion", "")
+    if tipo == "Automóvil":
+        detalle = f"{e.get('auto_marca_modelo','')} dominio {e.get('auto_dominio','')}".strip()
+    elif tipo == "Motocicleta":
+        detalle = f"{e.get('moto_tipo_marca','')} dominio {e.get('moto_dominio','')}".strip()
+    elif tipo == "Celular":
+        detalle = f"{e.get('celular_marca','')} {e.get('celular_modelo','')} - {e.get('propietario','')}".strip()
+    elif tipo == "Arma de fuego":
+        detalle = f"{e.get('arma_tipo','')} {e.get('arma_calibre','')} - Nro. {e.get('arma_numeracion','')}".strip()
+    else:
+        detalle = desc[:80]
+    return f"{pref}{tipo}: {detalle or desc or 'Sin descripción'}"
+
+
+def descripcion_elemento_acta(e):
+    tipo = e.get("tipo_elemento", "Elemento general")
+    partes = [f"Tipo: {tipo}"]
+
+    if tipo == "Automóvil":
+        partes.extend([
+            f"Marca/modelo: {e.get('auto_marca_modelo','S/D')}",
+            f"Color: {e.get('auto_color','S/D')}",
+            f"Dominio: {e.get('auto_dominio','S/D')}",
+            f"Motor: {e.get('auto_motor','S/D')}",
+            f"Chasis: {e.get('auto_chasis','S/D')}",
+            f"Observaciones: {e.get('auto_observaciones','')}"
+        ])
+    elif tipo == "Motocicleta":
+        partes.extend([
+            f"Tipo/marca: {e.get('moto_tipo_marca','S/D')}",
+            f"Color: {e.get('moto_color','S/D')}",
+            f"Dominio: {e.get('moto_dominio','S/D')}",
+            f"Cilindrada: {e.get('moto_cilindrada','S/D')}",
+            f"Motor: {e.get('moto_motor','S/D')}",
+            f"Chasis: {e.get('moto_chasis','S/D')}",
+            f"Observaciones: {e.get('moto_observaciones','')}"
+        ])
+    elif tipo == "Celular":
+        partes.extend([
+            f"Marca: {e.get('celular_marca','S/D')}",
+            f"Modelo: {e.get('celular_modelo','S/D')}",
+            f"Color: {e.get('celular_color','S/D')}",
+            f"IMEI: {e.get('celular_imei','S/D')}",
+            f"Línea: {e.get('celular_linea','S/D')}",
+            f"Propietario: {e.get('propietario','S/D')}",
+            f"Condición: {e.get('celular_condicion','S/D')}"
+        ])
+    elif tipo == "Arma de fuego":
+        partes.extend([
+            f"Tipo de arma: {e.get('arma_tipo','S/D')}",
+            f"Marca: {e.get('arma_marca','S/D')}",
+            f"Calibre: {e.get('arma_calibre','S/D')}",
+            f"Numeración visible: {e.get('arma_numeracion','S/D')}",
+            f"Cartuchos/vainas: {e.get('arma_cartuchos','S/D')}",
+            f"Intervención especializada: {e.get('intervencion_especializada','S/D')}"
+        ])
+    else:
+        partes.append(f"Descripción: {e.get('descripcion','S/D')}")
+
+    partes.extend([
+        f"Estado: {e.get('estado','S/D')}",
+        f"Lugar de hallazgo: {e.get('lugar_hallazgo','S/D')}",
+        f"Ubicación precisa: {e.get('ubicacion_exacta','S/D')}",
+        f"Destino / depósito: {e.get('destino','S/D')}",
+        f"Observaciones: {e.get('observaciones','')}"
+    ])
+
+    if e.get("alerta_no_manipular") == "SÍ":
+        partes.append("ALERTA: elemento con posible tratamiento especial. Preservar y evitar manipulación innecesaria.")
+
+    return "\n".join([p for p in partes if p and not p.endswith(": ")])
+
+
+def generar_pdf_acta_secuestro(datos_generales, acta, elementos, firma_path=None):
     pdf = FPDF()
+    pdf.set_margins(18, 15, 18)
     pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=18)
 
     pdf.set_font("Arial", "B", 12)
-    pdf.cell(0, 10, "POLICIA DE LA PROVINCIA DE SANTA FE", ln=True, align="C")
+    pdf.cell(0, 8, "POLICIA DE LA PROVINCIA DE SANTA FE", ln=True, align="C")
     pdf.set_font("Arial", "B", 14)
     pdf.cell(0, 10, "BLOQUE 7: ACTA DE SECUESTRO", ln=True, align="C")
-    pdf.ln(8)
+    pdf.ln(5)
 
     pdf.set_font("Arial", "B", 11)
-    pdf.cell(0, 8, "1. DATOS GENERALES:", ln=True)
-    pdf.set_font("Arial", size=10)
-    pdf.cell(0, 7, f"Ciudad: {datos['ciudad']} - Departamento: {datos['departamento']}", ln=True)
-    pdf.cell(0, 7, f"Fecha y hora: {datos['fecha']} {datos['hora']}", ln=True)
-    pdf.cell(0, 7, f"Personal actuante: {datos['personal_actuante']}", ln=True)
-    pdf.cell(0, 7, f"Dependencia: {datos['dependencia']} - Móvil: {datos['movil']}", ln=True)
-    pdf.ln(4)
+    pdf.cell(0, 8, "1. DATOS GENERALES", ln=True)
+    pdf.set_font("Arial", "", 10)
+    pdf.multi_cell(0, 7, limpiar_pdf(
+        f"Ciudad: {datos_generales.get('ciudad','S/D')} - Departamento: {datos_generales.get('departamento','S/D')}\n"
+        f"Fecha: {acta.get('fecha_acta','S/D')} - Hora: {acta.get('hora_acta','S/D')}\n"
+        f"Personal actuante: {datos_generales.get('personal_actuante','S/D')}\n"
+        f"Dependencia: {datos_generales.get('dependencia','S/D')} - Movil: {datos_generales.get('movil','S/D')}\n"
+        f"Lugar del acto de secuestro: {acta.get('lugar_acta','S/D')}"
+    ))
+    pdf.ln(3)
 
     pdf.set_font("Arial", "B", 11)
-    pdf.cell(0, 8, "2. TIPO DE SECUESTRO:", ln=True)
-    pdf.set_font("Arial", size=10)
-    pdf.cell(0, 7, f"Tipo: {datos['tipo_secuestro']}", ln=True)
-    pdf.cell(0, 7, f"Formulario: {datos['formulario']}", ln=True)
-    pdf.cell(0, 7, f"Código interno: {datos['codigo']}", ln=True)
-    pdf.ln(4)
+    pdf.cell(0, 8, "2. TESTIGO DE ACTUACION", ln=True)
+    pdf.set_font("Arial", "", 10)
+    pdf.multi_cell(0, 7, limpiar_pdf(
+        f"Nombre y apellido: {acta.get('testigo_nombre','S/D')}\n"
+        f"DNI: {acta.get('testigo_dni','S/D')}\n"
+        f"Domicilio: {acta.get('testigo_domicilio','S/D')}\n"
+        f"Telefono: {acta.get('testigo_telefono','S/D')}\n"
+        f"Correo: {acta.get('testigo_correo','S/D')}"
+    ))
+    pdf.ln(3)
 
     pdf.set_font("Arial", "B", 11)
-    pdf.cell(0, 8, "3. TESTIGO DE ACTUACIÓN:", ln=True)
-    pdf.set_font("Arial", size=10)
-    pdf.cell(0, 7, f"Nombre y apellido: {datos['testigo_nombre']}", ln=True)
-    pdf.cell(0, 7, f"DNI: {datos['testigo_dni']}", ln=True)
-    pdf.cell(0, 7, f"Domicilio: {datos['testigo_domicilio']}", ln=True)
-    pdf.cell(0, 7, f"Teléfono: {datos['testigo_telefono']}", ln=True)
-    pdf.cell(0, 7, f"Correo: {datos['testigo_correo']}", ln=True)
-    pdf.ln(4)
+    pdf.cell(0, 8, "3. ELEMENTOS INCLUIDOS EN ESTA ACTA", ln=True)
+    pdf.set_font("Arial", "", 10)
 
-    pdf.set_font("Arial", "B", 11)
-    pdf.cell(0, 8, "4. LUGAR, MOTIVO Y UBICACIÓN DEL SECUESTRO:", ln=True)
-    pdf.set_font("Arial", size=10)
-    pdf.multi_cell(0, 7, f"Lugar exacto: {datos['lugar_secuestro']}")
-    pdf.multi_cell(0, 7, f"Ubicación precisa del elemento: {datos['ubicacion_exacta']}")
-    pdf.multi_cell(0, 7, f"Motivo: {datos['motivo']}")
-    pdf.ln(4)
+    for idx, e in enumerate(elementos, start=1):
+        pdf.set_font("Arial", "B", 10)
+        pdf.multi_cell(0, 7, limpiar_pdf(f"Elemento Nro. {idx}: {elemento_label(e)}"))
+        pdf.set_font("Arial", "", 10)
+        pdf.multi_cell(0, 7, limpiar_pdf(descripcion_elemento_acta(e)))
+        pdf.ln(3)
 
-    pdf.set_font("Arial", "B", 11)
-    pdf.cell(0, 8, "5. DESCRIPCIÓN DEL ELEMENTO SECUESTRADO:", ln=True)
-    pdf.set_font("Arial", size=10)
-    pdf.multi_cell(0, 7, datos["descripcion"])
-    pdf.cell(0, 7, f"Estado general: {datos['estado']}", ln=True)
-    pdf.cell(0, 7, f"Destino / depósito: {datos['destino']}", ln=True)
-    pdf.ln(4)
-
-    if datos["formulario"] == "Automóvil":
+    if acta.get("observaciones_acta"):
         pdf.set_font("Arial", "B", 11)
-        pdf.cell(0, 8, "6. DATOS DEL AUTOMÓVIL:", ln=True)
-        pdf.set_font("Arial", size=10)
-        pdf.cell(0, 7, f"Marca/Modelo: {datos['auto_marca_modelo']}", ln=True)
-        pdf.cell(0, 7, f"Color: {datos['auto_color']}", ln=True)
-        pdf.cell(0, 7, f"Dominio: {datos['auto_dominio']}", ln=True)
-        pdf.cell(0, 7, f"Motor: {datos['auto_motor']}", ln=True)
-        pdf.cell(0, 7, f"Chasis: {datos['auto_chasis']}", ln=True)
-        pdf.multi_cell(0, 7, f"Faltantes / observaciones: {datos['auto_observaciones']}")
-        pdf.ln(4)
+        pdf.cell(0, 8, "4. OBSERVACIONES DEL ACTA", ln=True)
+        pdf.set_font("Arial", "", 10)
+        pdf.multi_cell(0, 7, limpiar_pdf(acta.get("observaciones_acta", "")))
+        pdf.ln(3)
 
-    if datos["formulario"] == "Motocicleta":
+    if any(e.get("alerta_no_manipular") == "SÍ" for e in elementos):
         pdf.set_font("Arial", "B", 11)
-        pdf.cell(0, 8, "6. DATOS DE LA MOTOCICLETA:", ln=True)
-        pdf.set_font("Arial", size=10)
-        pdf.cell(0, 7, f"Tipo/Marca: {datos['moto_tipo_marca']}", ln=True)
-        pdf.cell(0, 7, f"Color: {datos['moto_color']}", ln=True)
-        pdf.cell(0, 7, f"Dominio: {datos['moto_dominio']}", ln=True)
-        pdf.cell(0, 7, f"Cilindrada: {datos['moto_cilindrada']}", ln=True)
-        pdf.cell(0, 7, f"Motor: {datos['moto_motor']}", ln=True)
-        pdf.cell(0, 7, f"Chasis: {datos['moto_chasis']}", ln=True)
-        pdf.multi_cell(0, 7, f"Estado / observaciones: {datos['moto_observaciones']}")
-        pdf.ln(4)
+        pdf.cell(0, 8, "5. CONSTANCIA DE PRESERVACION", ln=True)
+        pdf.set_font("Arial", "", 10)
+        pdf.multi_cell(0, 7, limpiar_pdf(
+            "Se deja constancia que uno o mas elementos incluidos en la presente acta presentan posible tratamiento especial, "
+            "por lo que se recomienda preservar, evitar manipulacion innecesaria y dar intervencion a la autoridad o gabinete especializado cuando corresponda."
+        ))
+        pdf.ln(3)
 
-    if datos["observaciones"]:
-        pdf.set_font("Arial", "B", 11)
-        pdf.cell(0, 8, "7. OBSERVACIONES:", ln=True)
-        pdf.set_font("Arial", size=10)
-        pdf.multi_cell(0, 7, datos["observaciones"])
-        pdf.ln(4)
-
-    if firma_testigo:
-        pdf.set_font("Arial", "B", 11)
-        pdf.cell(0, 8, "8. FIRMA DIGITAL DEL TESTIGO:", ln=True)
-        pdf.image(firma_testigo, x=20, w=80)
+    if firma_path:
+        try:
+            pdf.set_font("Arial", "B", 11)
+            pdf.cell(0, 8, "FIRMA DIGITAL DEL TESTIGO", ln=True)
+            pdf.image(firma_path, x=25, w=70)
+            pdf.ln(8)
+        except Exception:
+            pass
 
     pdf.ln(15)
-    pdf.cell(90, 8, "____________________________", ln=False, align="C")
-    pdf.cell(90, 8, "____________________________", ln=True, align="C")
-    pdf.cell(90, 8, "Firma Testigo", ln=False, align="C")
-    pdf.cell(90, 8, "Firma Personal Actuante", ln=True, align="C")
+    pdf.cell(85, 8, "____________________________", ln=False, align="C")
+    pdf.cell(85, 8, "____________________________", ln=True, align="C")
+    pdf.cell(85, 8, "Firma Testigo", ln=False, align="C")
+    pdf.cell(85, 8, "Firma Personal Actuante", ln=True, align="C")
 
-    pdf.set_y(-30)
-    pdf.set_font("Arial", "I", 9)
-    pdf.cell(0, 10, "Creado por Sub-Comisario Castaneda Juan - S.I.V.", align="R")
+    pdf.set_y(-25)
+    pdf.set_font("Arial", "I", 8)
+    pdf.cell(0, 8, "Creado por Sub-Comisario Castaneda Juan - S.I.V.", align="R")
 
-    return bytes(pdf.output())
+    return pdf_bytes(pdf)
 
 
+# =====================================================
+# SESSION STATE
+# =====================================================
+if "b7_elementos" not in st.session_state:
+    st.session_state.b7_elementos = []
+
+if "b7_actas_secuestro" not in st.session_state:
+    st.session_state.b7_actas_secuestro = []
+
+
+# =====================================================
+# INTERFAZ
+# =====================================================
 st.title("📦 BLOQUE 7 — SECUESTROS")
-st.subheader("Secuestro de la causa / Secuestro por depósito")
+st.subheader("Lista de elementos secuestrados y actas firmables por testigo")
+st.warning("Regla: cada acta debe agrupar solo los elementos secuestrados en el mismo acto, ante el testigo que firma.")
+
 st.write("---")
+st.subheader("1. Datos generales del procedimiento")
 
-col1, col2 = st.columns(2)
+g1, g2 = st.columns(2)
 
-with col1:
+with g1:
     ciudad = st.text_input("Ciudad", key="b7_ciudad")
     departamento = st.text_input("Departamento", key="b7_departamento")
-    fecha = st.date_input("Fecha", datetime.date.today(), key="b7_fecha")
-    hora = st.time_input("Hora", key="b7_hora")
+    fecha_general = st.date_input("Fecha general", datetime.date.today(), key="b7_fecha_general")
+    hora_general = st.time_input("Hora general", key="b7_hora_general")
 
-with col2:
+with g2:
     personal_actuante = st.text_area("Personal actuante", key="b7_personal_actuante")
     dependencia = st.text_input("Dependencia", key="b7_dependencia")
     movil = st.text_input("Móvil policial", key="b7_movil")
 
-st.write("---")
-
-tipo_secuestro = st.radio(
-    "Tipo de secuestro",
-    ["Secuestro de la causa", "Secuestro por depósito"],
-    horizontal=True,
-    key="b7_tipo_secuestro"
-)
-
-formulario = st.selectbox(
-    "Formulario a utilizar",
-    ["Elemento general", "Automóvil", "Motocicleta"],
-    key="b7_formulario"
-)
-
-codigo = st.text_input("Código interno del secuestro", value=st.session_state.get("b7_codigo", "SEC-01"), key="b7_codigo")
+datos_generales = {
+    "ciudad": ciudad,
+    "departamento": departamento,
+    "fecha_general": str(fecha_general),
+    "hora_general": str(hora_general),
+    "personal_actuante": personal_actuante,
+    "dependencia": dependencia,
+    "movil": movil
+}
 
 st.write("---")
-st.subheader("👤 Testigo de actuación")
+st.subheader("2. Cargar elemento secuestrado")
 
-tc1, tc2 = st.columns(2)
-
-with tc1:
-    testigo_nombre = st.text_input("Nombre y apellido del testigo", key="b7_testigo_nombre")
-    testigo_dni = st.text_input("DNI del testigo", key="b7_testigo_dni")
-    testigo_correo = st.text_input("Correo electrónico del testigo", key="b7_testigo_correo")
-
-with tc2:
-    testigo_domicilio = st.text_input("Domicilio del testigo", key="b7_testigo_domicilio")
-    testigo_telefono = st.text_input("Teléfono del testigo", key="b7_testigo_telefono")
-
-st.write("---")
-st.subheader("📍 Lugar y motivo del secuestro")
-
-lugar_secuestro = st.text_area("Lugar exacto del secuestro", key="b7_lugar_secuestro")
-ubicacion_exacta = st.text_area(
-    "Ubicación precisa del elemento",
-    placeholder="Ej: sobre mesa del comedor, debajo de cama, interior de baúl...",
-    key="b7_ubicacion_exacta"
-)
-motivo = st.text_area("Motivo del secuestro", key="b7_motivo")
-
-st.write("---")
-st.subheader("🔍 Descripción del elemento")
-
-descripcion = st.text_area(
-    "Descripción policial del elemento secuestrado",
-    height=150,
-    placeholder="Ej: Se procede al secuestro de...",
-    key="b7_descripcion"
+tipo_elemento = st.selectbox(
+    "Tipo de elemento",
+    [
+        "Elemento general",
+        "Automóvil",
+        "Motocicleta",
+        "Celular",
+        "Arma de fuego",
+        "Efectos personales",
+        "Dinero",
+        "Documentación",
+        "Prenda de vestir",
+        "Sustancia / estupefaciente",
+        "Otro"
+    ],
+    key="b7_tipo_elemento"
 )
 
+descripcion = st.text_area("Descripción general del elemento", height=120, key="b7_descripcion")
 estado = st.selectbox(
     "Estado general",
     ["Bueno", "Regular", "Dañado", "Inutilizado", "Restos/Fragmentos", "No determinado"],
     key="b7_estado"
 )
 
-destino = st.text_input("Destino / depósito", placeholder="Ej: Depósito Judicial / Seccional / Fiscalía", key="b7_destino")
+c_lugar1, c_lugar2 = st.columns(2)
+with c_lugar1:
+    lugar_hallazgo = st.text_area("Lugar de hallazgo", key="b7_lugar_hallazgo")
+    ubicacion_exacta = st.text_area("Ubicación precisa", key="b7_ubicacion_exacta")
+with c_lugar2:
+    destino = st.text_input("Destino / depósito / resguardo", key="b7_destino")
+    propietario = st.text_input("Propietario o vinculación", placeholder="Ej: víctima, arrestado, desconocido", key="b7_propietario")
+    observaciones = st.text_area("Observaciones del elemento", key="b7_observaciones_elemento")
 
-texto_alerta = f"{descripcion} {formulario} {motivo} {ubicacion_exacta}"
+auto_marca_modelo = auto_color = auto_dominio = auto_motor = auto_chasis = auto_observaciones = ""
+moto_tipo_marca = moto_color = moto_dominio = moto_cilindrada = moto_motor = moto_chasis = moto_observaciones = ""
+celular_marca = celular_modelo = celular_color = celular_imei = celular_linea = celular_condicion = ""
+arma_tipo = arma_marca = arma_calibre = arma_numeracion = arma_cartuchos = intervencion_especializada = ""
 
-if detectar_no_manipular(texto_alerta):
-    st.error("""
-🚨 ALERTA DE NO MANIPULACIÓN
-
-El elemento informado podría requerir tratamiento especial.
-
-NO manipular.
-NO trasladar sin autorización.
-Preservar el lugar.
-Dar intervención a autoridad correspondiente / gabinete especializado.
-Dejar constancia en acta.
-""")
-
-st.write("---")
-
-auto_marca_modelo = ""
-auto_color = ""
-auto_dominio = ""
-auto_motor = ""
-auto_chasis = ""
-auto_observaciones = ""
-
-moto_tipo_marca = ""
-moto_color = ""
-moto_dominio = ""
-moto_cilindrada = ""
-moto_motor = ""
-moto_chasis = ""
-moto_observaciones = ""
-
-if formulario == "Automóvil":
-    st.subheader("🚗 Formulario especial: Automóvil")
-
+if tipo_elemento == "Automóvil":
+    st.markdown("#### 🚗 Datos especiales de automóvil")
     a1, a2, a3 = st.columns(3)
-
     with a1:
-        auto_marca_modelo = st.text_input("Marca / Modelo", key="b7_auto_marca_modelo")
+        auto_marca_modelo = st.text_input("Marca / modelo", key="b7_auto_marca_modelo")
         auto_color = st.text_input("Color", key="b7_auto_color")
-
     with a2:
-        auto_dominio = st.text_input("Dominio / Patente", key="b7_auto_dominio")
-        auto_motor = st.text_input("Nro. Motor", key="b7_auto_motor")
-
+        auto_dominio = st.text_input("Dominio / patente", key="b7_auto_dominio")
+        auto_motor = st.text_input("Nro. motor", key="b7_auto_motor")
     with a3:
-        auto_chasis = st.text_input("Nro. Chasis", key="b7_auto_chasis")
-
+        auto_chasis = st.text_input("Nro. chasis", key="b7_auto_chasis")
     auto_observaciones = st.text_area("Faltantes / estado / observaciones del automóvil", key="b7_auto_observaciones")
 
-if formulario == "Motocicleta":
-    st.subheader("🏍️ Formulario especial: Motocicleta")
-
+elif tipo_elemento == "Motocicleta":
+    st.markdown("#### 🏍️ Datos especiales de motocicleta")
     m1, m2, m3 = st.columns(3)
-
     with m1:
-        moto_tipo_marca = st.text_input("Tipo / Marca", key="b7_moto_tipo_marca")
+        moto_tipo_marca = st.text_input("Tipo / marca", key="b7_moto_tipo_marca")
         moto_color = st.text_input("Color", key="b7_moto_color")
-
     with m2:
         moto_dominio = st.text_input("Dominio", key="b7_moto_dominio")
         moto_cilindrada = st.text_input("Cilindrada", key="b7_moto_cilindrada")
-
     with m3:
-        moto_motor = st.text_input("Nro. Motor", key="b7_moto_motor")
-        moto_chasis = st.text_input("Nro. Chasis", key="b7_moto_chasis")
-
+        moto_motor = st.text_input("Nro. motor", key="b7_moto_motor")
+        moto_chasis = st.text_input("Nro. chasis", key="b7_moto_chasis")
     moto_observaciones = st.text_area("Estado actual / observaciones de la motocicleta", key="b7_moto_observaciones")
 
-st.write("---")
-st.subheader("📝 Observaciones finales")
+elif tipo_elemento == "Celular":
+    st.markdown("#### 📱 Datos especiales de celular")
+    cel1, cel2, cel3 = st.columns(3)
+    with cel1:
+        celular_marca = st.text_input("Marca", key="b7_celular_marca")
+        celular_modelo = st.text_input("Modelo", key="b7_celular_modelo")
+    with cel2:
+        celular_color = st.text_input("Color", key="b7_celular_color")
+        celular_imei = st.text_input("IMEI si se conoce", key="b7_celular_imei")
+    with cel3:
+        celular_linea = st.text_input("Número de línea si se conoce", key="b7_celular_linea")
+        celular_condicion = st.selectbox("Condición", ["No determinada", "Encendido", "Apagado", "Bloqueado", "Roto"], key="b7_celular_condicion")
 
-observaciones = st.text_area("Observaciones generales", key="b7_observaciones")
+elif tipo_elemento == "Arma de fuego":
+    st.markdown("#### ⚠️ Datos especiales de arma de fuego")
+    ar1, ar2, ar3 = st.columns(3)
+    with ar1:
+        arma_tipo = st.text_input("Tipo de arma", placeholder="Pistola, revólver, escopeta...", key="b7_arma_tipo")
+        arma_marca = st.text_input("Marca", key="b7_arma_marca")
+    with ar2:
+        arma_calibre = st.text_input("Calibre", key="b7_arma_calibre")
+        arma_numeracion = st.text_input("Numeración visible", key="b7_arma_numeracion")
+    with ar3:
+        arma_cartuchos = st.text_input("Cartuchos / vainas / municiones", key="b7_arma_cartuchos")
+        intervencion_especializada = st.text_input("Intervención especializada / autoridad", key="b7_intervencion_especializada")
 
-st.write("---")
-st.subheader("✍️ Firma digital del testigo")
+texto_alerta = " ".join([
+    tipo_elemento, descripcion, lugar_hallazgo, ubicacion_exacta, destino, propietario,
+    celular_marca, celular_modelo, arma_tipo, arma_calibre, arma_cartuchos
+])
 
-canvas_result = st_canvas(
-    fill_color="rgba(255, 255, 255, 0)",
-    stroke_width=2,
-    stroke_color="#000000",
-    background_color="#FFFFFF",
-    height=180,
-    width=500,
-    drawing_mode="freedraw",
-    key="firma_testigo_canvas"
-)
+alerta = detectar_no_manipular(texto_alerta)
 
-firma_testigo = convertir_firma_a_bytes(canvas_result)
+if alerta:
+    st.error("""
+🚨 ALERTA DE NO MANIPULACIÓN / PRESERVACIÓN
 
-st.write("---")
+El elemento informado podría requerir tratamiento especial.
+NO manipular innecesariamente. Preservar. Dar intervención a autoridad o gabinete especializado cuando corresponda.
+""")
 
-if st.button("📄 GENERAR ACTA DE SECUESTRO COMPLETA"):
-    campos_faltantes = []
-
-    if not ciudad:
-        campos_faltantes.append("Ciudad")
-    if not departamento:
-        campos_faltantes.append("Departamento")
-    if not personal_actuante:
-        campos_faltantes.append("Personal actuante")
-    if not dependencia:
-        campos_faltantes.append("Dependencia")
-    if not movil:
-        campos_faltantes.append("Móvil policial")
-    if not testigo_nombre:
-        campos_faltantes.append("Nombre del testigo")
-    if not testigo_dni:
-        campos_faltantes.append("DNI del testigo")
-    if not testigo_telefono:
-        campos_faltantes.append("Teléfono del testigo")
-    if not testigo_correo:
-        campos_faltantes.append("Correo electrónico del testigo")
-    if not testigo_domicilio:
-        campos_faltantes.append("Domicilio del testigo")
-    if not lugar_secuestro:
-        campos_faltantes.append("Lugar exacto del secuestro")
-    if not ubicacion_exacta:
-        campos_faltantes.append("Ubicación precisa del elemento")
-    if not motivo:
-        campos_faltantes.append("Motivo del secuestro")
-    if not descripcion:
-        campos_faltantes.append("Descripción del elemento")
-    if not destino:
-        campos_faltantes.append("Destino / depósito")
-    if firma_testigo is None:
-        campos_faltantes.append("Firma digital del testigo")
-
-    if formulario == "Automóvil":
-        if not auto_marca_modelo:
-            campos_faltantes.append("Marca / modelo del automóvil")
-        if not auto_dominio:
-            campos_faltantes.append("Dominio del automóvil")
-
-    if formulario == "Motocicleta":
-        if not moto_tipo_marca:
-            campos_faltantes.append("Tipo / marca de motocicleta")
-        if not moto_dominio:
-            campos_faltantes.append("Dominio de motocicleta")
-
-    if campos_faltantes:
-        st.error("⚠️ No se puede generar el acta. Faltan campos obligatorios:")
-        for campo in campos_faltantes:
-            st.write(f"- {campo}")
-
+if st.button("➕ Agregar elemento a la lista", use_container_width=True):
+    if not descripcion and tipo_elemento not in ["Automóvil", "Motocicleta", "Celular", "Arma de fuego"]:
+        st.error("Debe cargar una descripción del elemento.")
     else:
-        datos_b7 = {
-            "bloque": 7,
-            "ciudad": ciudad,
-            "departamento": departamento,
-            "fecha": str(fecha),
-            "hora": str(hora),
-            "personal_actuante": personal_actuante,
-            "dependencia": dependencia,
-            "movil": movil,
-            "tipo_secuestro": tipo_secuestro,
-            "formulario": formulario,
-            "codigo": codigo,
-            "testigo_nombre": testigo_nombre,
-            "testigo_dni": testigo_dni,
-            "testigo_domicilio": testigo_domicilio,
-            "testigo_telefono": testigo_telefono,
-            "testigo_correo": testigo_correo,
-            "lugar_secuestro": lugar_secuestro,
-            "ubicacion_exacta": ubicacion_exacta,
-            "motivo": motivo,
+        elemento = {
+            "id_elemento": len(st.session_state.b7_elementos) + 1,
+            "tipo_elemento": tipo_elemento,
             "descripcion": descripcion,
             "estado": estado,
+            "lugar_hallazgo": lugar_hallazgo,
+            "ubicacion_exacta": ubicacion_exacta,
             "destino": destino,
+            "propietario": propietario,
             "observaciones": observaciones,
-            "alerta_no_manipular": "SÍ" if detectar_no_manipular(texto_alerta) else "NO",
+            "alerta_no_manipular": "SÍ" if alerta else "NO",
             "auto_marca_modelo": auto_marca_modelo,
             "auto_color": auto_color,
             "auto_dominio": auto_dominio,
@@ -403,31 +419,195 @@ if st.button("📄 GENERAR ACTA DE SECUESTRO COMPLETA"):
             "moto_cilindrada": moto_cilindrada,
             "moto_motor": moto_motor,
             "moto_chasis": moto_chasis,
-            "moto_observaciones": moto_observaciones
+            "moto_observaciones": moto_observaciones,
+            "celular_marca": celular_marca,
+            "celular_modelo": celular_modelo,
+            "celular_color": celular_color,
+            "celular_imei": celular_imei,
+            "celular_linea": celular_linea,
+            "celular_condicion": celular_condicion,
+            "arma_tipo": arma_tipo,
+            "arma_marca": arma_marca,
+            "arma_calibre": arma_calibre,
+            "arma_numeracion": arma_numeracion,
+            "arma_cartuchos": arma_cartuchos,
+            "intervencion_especializada": intervencion_especializada
         }
+        st.session_state.b7_elementos.append(elemento)
+        st.success("Elemento agregado a la lista de secuestros.")
+        autoguardar_bloque(BLOQUE_ID)
 
-        pdf_b7 = generar_pdf_bloque_7(datos_b7, firma_testigo)
-        json_b7 = json.dumps(datos_b7, indent=4, ensure_ascii=False)
+st.write("---")
+st.subheader("3. Lista de elementos secuestrados")
 
-        st.success("✅ Acta de secuestro generada correctamente.")
+if not st.session_state.b7_elementos:
+    st.info("Todavía no hay elementos secuestrados cargados.")
+else:
+    for idx, e in enumerate(st.session_state.b7_elementos, start=1):
+        with st.expander(elemento_label(e, idx), expanded=False):
+            st.json(e)
+            if e.get("alerta_no_manipular") == "SÍ":
+                st.warning("Elemento con alerta de preservación/no manipulación.")
+            if st.button(f"🗑️ Eliminar elemento {idx}", key=f"b7_eliminar_{idx}"):
+                st.session_state.b7_elementos.pop(idx - 1)
+                for j, item in enumerate(st.session_state.b7_elementos, start=1):
+                    item["id_elemento"] = j
+                autoguardar_bloque(BLOQUE_ID)
+                st.rerun()
 
-        c1, c2 = st.columns(2)
+st.write("---")
+st.subheader("4. Generar acta de secuestro con elementos seleccionados")
 
-        with c1:
+if st.session_state.b7_elementos:
+    st.info("Seleccione los elementos que fueron secuestrados en el mismo acto y ante el mismo testigo.")
+
+    opciones = {
+        elemento_label(e, idx): idx - 1
+        for idx, e in enumerate(st.session_state.b7_elementos, start=1)
+    }
+
+    seleccion = st.multiselect(
+        "Elementos que integran ESTA acta",
+        list(opciones.keys()),
+        key="b7_elementos_para_acta"
+    )
+
+    st.markdown("#### Testigo, lugar y firma de esta acta")
+    t1, t2 = st.columns(2)
+    with t1:
+        testigo_nombre = st.text_input("Nombre y apellido del testigo", key="b7_testigo_nombre")
+        testigo_dni = st.text_input("DNI del testigo", key="b7_testigo_dni")
+        testigo_correo = st.text_input("Correo electrónico del testigo", key="b7_testigo_correo")
+    with t2:
+        testigo_domicilio = st.text_input("Domicilio del testigo", key="b7_testigo_domicilio")
+        testigo_telefono = st.text_input("Teléfono del testigo", key="b7_testigo_telefono")
+
+    a1, a2, a3 = st.columns(3)
+    with a1:
+        fecha_acta = st.date_input("Fecha del acta", datetime.date.today(), key="b7_fecha_acta")
+    with a2:
+        hora_acta = st.time_input("Hora del acta", key="b7_hora_acta")
+    with a3:
+        lugar_acta = st.text_input("Lugar del acto de secuestro", key="b7_lugar_acta")
+
+    observaciones_acta = st.text_area("Observaciones propias de esta acta", key="b7_observaciones_acta")
+
+    st.markdown("#### Firma digital del testigo")
+    canvas_result = st_canvas(
+        fill_color="rgba(255, 255, 255, 0)",
+        stroke_width=2,
+        stroke_color="#000000",
+        background_color="#FFFFFF",
+        height=180,
+        width=500,
+        drawing_mode="freedraw",
+        key="b7_firma_testigo_canvas"
+    )
+
+    firma_path = convertir_firma_temp(canvas_result)
+
+    if st.button("📄 GENERAR ACTA DE SECUESTRO PARA FIRMA", use_container_width=True):
+        faltantes = []
+        if not seleccion:
+            faltantes.append("Seleccionar al menos un elemento")
+        if not testigo_nombre:
+            faltantes.append("Nombre del testigo")
+        if not testigo_dni:
+            faltantes.append("DNI del testigo")
+        if not lugar_acta:
+            faltantes.append("Lugar del acto de secuestro")
+        if firma_path is None:
+            faltantes.append("Firma digital del testigo")
+
+        if faltantes:
+            st.error("No se puede generar el acta. Faltan:")
+            for f in faltantes:
+                st.write(f"- {f}")
+        else:
+            indices = [opciones[x] for x in seleccion]
+            elementos_acta = [st.session_state.b7_elementos[i] for i in indices]
+
+            acta = {
+                "id_acta": len(st.session_state.b7_actas_secuestro) + 1,
+                "fecha_acta": str(fecha_acta),
+                "hora_acta": str(hora_acta),
+                "lugar_acta": lugar_acta,
+                "testigo_nombre": testigo_nombre,
+                "testigo_dni": testigo_dni,
+                "testigo_domicilio": testigo_domicilio,
+                "testigo_telefono": testigo_telefono,
+                "testigo_correo": testigo_correo,
+                "personal_actuante": personal_actuante,
+                "elementos_ids": [e["id_elemento"] for e in elementos_acta],
+                "elementos_resumen": [elemento_label(e) for e in elementos_acta],
+                "observaciones_acta": observaciones_acta,
+                "firmada": "SÍ"
+            }
+
+            pdf_acta = generar_pdf_acta_secuestro(datos_generales, acta, elementos_acta, firma_path)
+
+            st.session_state.b7_actas_secuestro.append(acta)
+            autoguardar_bloque(BLOQUE_ID)
+
+            st.success("Acta de secuestro generada y registrada en la lista de actas.")
+
             st.download_button(
-                "📥 Descargar PDF Bloque 7",
-                data=pdf_b7,
-                file_name="Bloque_7_Secuestro.pdf",
-                mime="application/pdf"
+                "📥 Descargar PDF de esta acta",
+                data=pdf_acta,
+                file_name=f"Acta_Secuestro_{acta['id_acta']}.pdf",
+                mime="application/pdf",
+                use_container_width=True
             )
 
-        with c2:
-            st.download_button(
-                "📥 Descargar JSON Bloque 7",
-                data=json_b7,
-                file_name="bloque_7.json",
-                mime="application/json"
-            )
+            if firma_path and os.path.exists(firma_path):
+                try:
+                    os.unlink(firma_path)
+                except Exception:
+                    pass
+
+st.write("---")
+st.subheader("5. Actas de secuestro generadas")
+
+if not st.session_state.b7_actas_secuestro:
+    st.info("Todavía no hay actas de secuestro generadas.")
+else:
+    for acta in st.session_state.b7_actas_secuestro:
+        with st.expander(f"Acta N° {acta.get('id_acta')} - Testigo: {acta.get('testigo_nombre')} - Elementos: {len(acta.get('elementos_ids', []))}"):
+            st.json(acta)
+
+st.write("---")
+st.subheader("6. Exportar JSON para BLOQUE 8")
+
+datos_b7 = {
+    "bloque": 7,
+    "modulo": "BLOQUE_7_SECUESTROS",
+    "version": "lista_elementos_y_actas_firmables",
+    "datos_generales": datos_generales,
+    "elementos": st.session_state.b7_elementos,
+    "actas_secuestro": st.session_state.b7_actas_secuestro,
+    "resumen_para_acta_procedimiento": ""
+}
+
+# Resumen automatico para BLOQUE 8 / acta de procedimiento
+if st.session_state.b7_elementos:
+    resumenes = []
+    for idx, e in enumerate(st.session_state.b7_elementos, start=1):
+        alerta_txt = " con preservación especial" if e.get("alerta_no_manipular") == "SÍ" else ""
+        resumenes.append(f"{idx}) {elemento_label(e)}; destino: {e.get('destino','S/D')}{alerta_txt}")
+    datos_b7["resumen_para_acta_procedimiento"] = "Se registran los siguientes elementos secuestrados: " + " | ".join(resumenes)
+
+json_b7 = json.dumps(datos_b7, indent=4, ensure_ascii=False)
+
+st.download_button(
+    "📥 Descargar JSON Bloque 7 completo",
+    data=json_b7,
+    file_name="bloque_7_secuestros.json",
+    mime="application/json",
+    use_container_width=True
+)
+
+with st.expander("Ver JSON Bloque 7"):
+    st.code(json_b7, language="json")
 
 # Guardado automático del bloque al finalizar la corrida
 try:
