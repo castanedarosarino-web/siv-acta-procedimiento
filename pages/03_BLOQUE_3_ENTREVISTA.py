@@ -11,20 +11,18 @@ from datetime import datetime
 # CONFIGURACIÓN DE PÁGINA
 st.set_page_config(page_title="S.I.V. - Bloque 3: ACTA DE ENTREVISTA", layout="wide")
 
-# =====================================================
-# AUTOGUARDADO EN MEMORIA ENTRE BLOQUES
-# Evita que Streamlit borre datos al navegar entre paginas.
-# =====================================================
-for _k in list(st.session_state.keys()):
-    st.session_state[_k] = st.session_state[_k]
+from siv_guardado import iniciar_guardado_seguro, panel_guardado_seguro, autoguardar_bloque
 
+BLOQUE_ID = "BLOQUE_3_ENTREVISTA"
+iniciar_guardado_seguro(BLOQUE_ID)
+panel_guardado_seguro(BLOQUE_ID)
 
 # --- SIDEBAR: DATOS DE LA DEPENDENCIA ---
 with st.sidebar:
     st.header("Datos de la Guardia")
-    interviniente = st.text_input("Rango y Nombre", value="SUB COMISARIO CASTAÑEDA JUAN")
-    dependencia = st.text_input("Dependencia", value="SUBCOMISARIA ZAVALLA - UR II")
-    lugar = st.text_input("Localidad", value="ZAVALLA")
+    interviniente = st.text_input("Rango y Nombre", value=st.session_state.get("b3_interviniente", "SUB COMISARIO CASTAÑEDA JUAN"), key="b3_interviniente")
+    dependencia = st.text_input("Dependencia", value=st.session_state.get("b3_dependencia", "SUBCOMISARIA ZAVALLA - UR II"), key="b3_dependencia")
+    lugar = st.text_input("Localidad", value=st.session_state.get("b3_lugar", "ZAVALLA"), key="b3_lugar")
 
 def limpiar_texto(texto):
     if texto is None: return ""
@@ -92,19 +90,19 @@ def main():
     
     with st.expander("👤 DATOS DEL ENTREVISTADO", expanded=True):
         c1, c2 = st.columns([2, 1])
-        nombre = c1.text_input("Apellido y Nombres").upper()
-        dni = c2.text_input("DNI")
+        nombre = c1.text_input("Apellido y Nombres", key="b3_nombre").upper()
+        dni = c2.text_input("DNI", key="b3_dni")
         
         c3, c4 = st.columns(2)
-        telefono = c3.text_input("Teléfono (Protocolo)")
-        correo = c4.text_input("Correo Electrónico (Protocolo)")
+        telefono = c3.text_input("Teléfono (Protocolo)", key="b3_telefono")
+        correo = c4.text_input("Correo Electrónico (Protocolo)", key="b3_correo")
         
         c5, c6 = st.columns([1, 2])
-        fecha_nac = c5.text_input("Fecha de Nacimiento (DD/MM/AAAA)")
-        domicilio = c6.text_input("Domicilio Real")
+        fecha_nac = c5.text_input("Fecha de Nacimiento (DD/MM/AAAA)", key="b3_fecha_nac")
+        domicilio = c6.text_input("Domicilio Real", key="b3_domicilio")
 
     st.subheader("✍️ Relato de la Entrevista")
-    relato = st.text_area("Ingrese el relato espontáneo:", height=200)
+    relato = st.text_area("Ingrese el relato espontáneo:", height=200, key="b3_relato")
 
     # SECCIÓN DE FIRMA DIGITAL
     st.markdown("---")
@@ -152,3 +150,9 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# Guardado automático del bloque al finalizar la corrida
+try:
+    autoguardar_bloque(BLOQUE_ID)
+except Exception:
+    pass
