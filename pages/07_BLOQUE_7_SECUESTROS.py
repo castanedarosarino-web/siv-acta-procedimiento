@@ -94,6 +94,16 @@ def elemento_label(e, idx=None):
     return f"{pref}{tipo}: {detalle or desc or 'Sin descripción'}"
 
 
+def es_elemento_comun(e):
+    """
+    Elementos que pueden ir en la plantilla típica de levantamiento y secuestro de elementos.
+    Vehículos y armas quedan separados porque requieren actas/tratamiento específico.
+    """
+    tipo = e.get("tipo_elemento", "")
+    return tipo not in ["Automóvil", "Motocicleta", "Arma de fuego"]
+
+
+
 def descripcion_elemento_acta(e):
     tipo = e.get("tipo_elemento", "Elemento general")
     partes = [f"Tipo: {tipo}"]
@@ -151,6 +161,96 @@ def descripcion_elemento_acta(e):
         partes.append("ALERTA: elemento con posible tratamiento especial. Preservar y evitar manipulación innecesaria.")
 
     return "\n".join([p for p in partes if p and not p.endswith(": ")])
+
+
+
+def generar_pdf_elementos_comunes(datos_generales, acta, elementos, firma_path=None):
+    """
+    Plantilla predeterminada basada en:
+    Acta de levantamiento y secuestro de elementos.
+    Para billetera, documentación, dinero, celular común, prendas, mochila, etc.
+    No reemplaza plantillas especiales de auto/moto/arma.
+    """
+    pdf = FPDF()
+    pdf.set_margins(18, 12, 18)
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=16)
+
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(0, 8, "Policia de la Provincia de Santa Fe", ln=True, align="C")
+    pdf.set_font("Arial", "", 10)
+    pdf.cell(0, 6, "Unidad Regional II - Perez-Zavalla-Soldini", ln=True, align="C")
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(0, 8, "Acta de levantamiento y secuestro de elementos", ln=True, align="C")
+    pdf.ln(4)
+
+    fecha_txt = acta.get("fecha_acta", "S/D")
+    hora_txt = acta.get("hora_acta", "S/D")
+    ciudad = datos_generales.get("ciudad", "S/D")
+    departamento = datos_generales.get("departamento", "S/D")
+    personal = datos_generales.get("personal_actuante", "S/D")
+    movil = datos_generales.get("movil", "S/D")
+    dependencia = datos_generales.get("dependencia", "S/D")
+    lugar = acta.get("lugar_acta", "S/D")
+
+    testigo_1 = (
+        f"{acta.get('testigo_nombre','S/D')}, DNI Nro. {acta.get('testigo_dni','S/D')}, "
+        f"domicilio {acta.get('testigo_domicilio','S/D')}, telefono {acta.get('testigo_telefono','S/D')}"
+    )
+
+    testigo_2_nombre = acta.get("testigo2_nombre", "")
+    if testigo_2_nombre:
+        testigo_2 = (
+            f" y el/la llamado/a {testigo_2_nombre}, DNI Nro. {acta.get('testigo2_dni','S/D')}, "
+            f"domicilio {acta.get('testigo2_domicilio','S/D')}, telefono {acta.get('testigo2_telefono','S/D')}"
+        )
+    else:
+        testigo_2 = ""
+
+    elementos_txt = []
+    for idx, e in enumerate(elementos, start=1):
+        elementos_txt.append(f"{idx}) {descripcion_elemento_acta(e)}")
+
+    cuerpo = f"""
+En la ciudad de {ciudad}, departamento {departamento}, Provincia de Santa Fe, en fecha {fecha_txt}, siendo las {hora_txt} horas, el funcionario policial actuante quien suscribe {personal}, encargado/a del movil policial Nro. {movil}, numerario/s de {dependencia}, a los fines legales que diere a lugar y en las circunstancias y comprobaciones que se detallan, confecciona la presente acta donde HACE CONSTAR:
+
+Que en la fecha y hora indicada, constituido el personal actuante en {lugar}, se solicito la presencia de ciudadano/a que oficie de TESTIGO habil, haciendose presente y acreditando identidad el/la llamado/a {testigo_1}{testigo_2}.
+
+Que de acuerdo a las circunstancias constatadas, y en presencia del/de los testigo/s, se procede al LEVANTAMIENTO Y SECUESTRO de los siguientes elementos:
+
+{chr(10).join(elementos_txt)}
+
+Observaciones:
+{acta.get('observaciones_acta','')}
+
+Por lo que no siendo para mas, se da por finalizada la presente y de concluido el acto, que previa lectura de su contenido en forma individual, firman los testigos y el personal actuante para debida constancia.
+"""
+
+    pdf.set_font("Arial", "", 10)
+    for parrafo in limpiar_pdf(cuerpo).split("\n"):
+        if not parrafo.strip():
+            pdf.ln(3)
+        else:
+            pdf.multi_cell(0, 6, parrafo, align="J")
+
+    if firma_path:
+        try:
+            pdf.ln(4)
+            pdf.set_font("Arial", "B", 10)
+            pdf.cell(0, 7, "Firma digital del testigo", ln=True)
+            pdf.image(firma_path, x=25, w=70)
+        except Exception:
+            pass
+
+    pdf.ln(16)
+    pdf.cell(60, 8, "____________________", ln=False, align="C")
+    pdf.cell(60, 8, "____________________", ln=False, align="C")
+    pdf.cell(60, 8, "____________________", ln=True, align="C")
+    pdf.cell(60, 6, "Firma Testigo", ln=False, align="C")
+    pdf.cell(60, 6, "Firma Testigo", ln=False, align="C")
+    pdf.cell(60, 6, "Firma Personal Actuante", ln=True, align="C")
+
+    return pdf_bytes(pdf)
 
 
 def generar_pdf_acta_secuestro(datos_generales, acta, elementos, firma_path=None):
@@ -255,6 +355,7 @@ if "b7_actas_secuestro" not in st.session_state:
 st.title("📦 BLOQUE 7 — SECUESTROS")
 st.subheader("Lista de elementos secuestrados y actas firmables por testigo")
 st.warning("Regla: cada acta debe agrupar solo los elementos secuestrados en el mismo acto, ante el testigo que firma.")
+st.info("Plantilla predeterminada: si los elementos seleccionados son comunes, el PDF sale como Acta de levantamiento y secuestro de elementos. Si incluye automóvil, motocicleta o arma, usa acta especial separada.")
 
 st.write("---")
 st.subheader("1. Datos generales del procedimiento")
@@ -482,6 +583,15 @@ if st.session_state.b7_elementos:
         testigo_domicilio = st.text_input("Domicilio del testigo", key="b7_testigo_domicilio")
         testigo_telefono = st.text_input("Teléfono del testigo", key="b7_testigo_telefono")
 
+    with st.expander("Segundo testigo opcional para acta de elementos comunes"):
+        t21, t22 = st.columns(2)
+        with t21:
+            testigo2_nombre = st.text_input("Nombre y apellido del segundo testigo", key="b7_testigo2_nombre")
+            testigo2_dni = st.text_input("DNI del segundo testigo", key="b7_testigo2_dni")
+        with t22:
+            testigo2_domicilio = st.text_input("Domicilio del segundo testigo", key="b7_testigo2_domicilio")
+            testigo2_telefono = st.text_input("Teléfono del segundo testigo", key="b7_testigo2_telefono")
+
     a1, a2, a3 = st.columns(3)
     with a1:
         fecha_acta = st.date_input("Fecha del acta", datetime.date.today(), key="b7_fecha_acta")
@@ -537,6 +647,10 @@ if st.session_state.b7_elementos:
                 "testigo_domicilio": testigo_domicilio,
                 "testigo_telefono": testigo_telefono,
                 "testigo_correo": testigo_correo,
+                "testigo2_nombre": testigo2_nombre,
+                "testigo2_dni": testigo2_dni,
+                "testigo2_domicilio": testigo2_domicilio,
+                "testigo2_telefono": testigo2_telefono,
                 "personal_actuante": personal_actuante,
                 "elementos_ids": [e["id_elemento"] for e in elementos_acta],
                 "elementos_resumen": [elemento_label(e) for e in elementos_acta],
@@ -544,7 +658,12 @@ if st.session_state.b7_elementos:
                 "firmada": "SÍ"
             }
 
-            pdf_acta = generar_pdf_acta_secuestro(datos_generales, acta, elementos_acta, firma_path)
+            if all(es_elemento_comun(e) for e in elementos_acta):
+                pdf_acta = generar_pdf_elementos_comunes(datos_generales, acta, elementos_acta, firma_path)
+                acta["plantilla_usada"] = "Acta de levantamiento y secuestro de elementos comunes"
+            else:
+                pdf_acta = generar_pdf_acta_secuestro(datos_generales, acta, elementos_acta, firma_path)
+                acta["plantilla_usada"] = "Acta especial / vehículo / elemento con tratamiento diferenciado"
 
             st.session_state.b7_actas_secuestro.append(acta)
             autoguardar_bloque(BLOQUE_ID)
