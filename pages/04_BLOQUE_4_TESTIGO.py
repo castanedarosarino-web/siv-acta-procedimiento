@@ -11,19 +11,17 @@ from datetime import datetime
 # CONFIGURACIÓN DE PÁGINA
 st.set_page_config(page_title="S.I.V. - Bloque 4: DECLARACIÓN DE TESTIGO", layout="wide")
 
-# =====================================================
-# AUTOGUARDADO EN MEMORIA ENTRE BLOQUES
-# Evita que Streamlit borre datos al navegar entre paginas.
-# =====================================================
-for _k in list(st.session_state.keys()):
-    st.session_state[_k] = st.session_state[_k]
+from siv_guardado import iniciar_guardado_seguro, panel_guardado_seguro, autoguardar_bloque
 
+BLOQUE_ID = "BLOQUE_4_TESTIGO"
+iniciar_guardado_seguro(BLOQUE_ID)
+panel_guardado_seguro(BLOQUE_ID)
 
 # --- SIDEBAR ---
 with st.sidebar:
     st.header("Oficial Interviniente")
-    interviniente = st.text_input("Rango y Nombre", value="SUB COMISARIO CASTAÑEDA JUAN")
-    dependencia = st.text_input("Dependencia", value="SUBCOMISARIA ZAVALLA - UR II")
+    interviniente = st.text_input("Rango y Nombre", value=st.session_state.get("b4_interviniente", "SUB COMISARIO CASTAÑEDA JUAN"), key="b4_interviniente")
+    dependencia = st.text_input("Dependencia", value=st.session_state.get("b4_dependencia", "SUBCOMISARIA ZAVALLA - UR II"), key="b4_dependencia")
 
 def limpiar_texto(texto):
     if texto is None: return ""
@@ -88,19 +86,19 @@ def main():
     
     with st.expander("👤 DATOS FILIATORIOS DEL TESTIGO", expanded=True):
         c1, c2 = st.columns([2, 1])
-        nombre = c1.text_input("Apellido y Nombres").upper()
-        dni = c2.text_input("DNI")
+        nombre = c1.text_input("Apellido y Nombres", key="b4_nombre").upper()
+        dni = c2.text_input("DNI", key="b4_dni")
         
         c3, c4 = st.columns(2)
-        telefono = c3.text_input("Teléfono de Contacto")
-        correo = c4.text_input("Correo Electrónico")
+        telefono = c3.text_input("Teléfono de Contacto", key="b4_telefono")
+        correo = c4.text_input("Correo Electrónico", key="b4_correo")
         
         c5, c6 = st.columns([1, 2])
-        fecha_nac = c5.text_input("Fecha de Nacimiento")
-        domicilio = c6.text_input("Domicilio Real")
+        fecha_nac = c5.text_input("Fecha de Nacimiento", key="b4_fecha_nac")
+        domicilio = c6.text_input("Domicilio Real", key="b4_domicilio")
 
     st.subheader("✍️ Declaración Testimonial")
-    relato = st.text_area("El testigo manifiesta que:", height=200)
+    relato = st.text_area("El testigo manifiesta que:", height=200, key="b4_relato")
 
     st.markdown("---")
     st.subheader("🖊️ FIRMA DEL TESTIGO")
@@ -146,3 +144,9 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# Guardado automático del bloque al finalizar la corrida
+try:
+    autoguardar_bloque(BLOQUE_ID)
+except Exception:
+    pass
