@@ -6,13 +6,11 @@ from PIL import Image
 import io
 import datetime
 
-# =====================================================
-# AUTOGUARDADO EN MEMORIA ENTRE BLOQUES
-# Evita que Streamlit borre datos al navegar entre paginas.
-# =====================================================
-for _k in list(st.session_state.keys()):
-    st.session_state[_k] = st.session_state[_k]
+from siv_guardado import iniciar_guardado_seguro, panel_guardado_seguro, autoguardar_bloque
 
+BLOQUE_ID = "BLOQUE_7_SECUESTROS"
+iniciar_guardado_seguro(BLOQUE_ID)
+panel_guardado_seguro(BLOQUE_ID)
 
 
 ELEMENTOS_NO_MANIPULAR = [
@@ -152,30 +150,32 @@ st.write("---")
 col1, col2 = st.columns(2)
 
 with col1:
-    ciudad = st.text_input("Ciudad")
-    departamento = st.text_input("Departamento")
-    fecha = st.date_input("Fecha", datetime.date.today())
-    hora = st.time_input("Hora")
+    ciudad = st.text_input("Ciudad", key="b7_ciudad")
+    departamento = st.text_input("Departamento", key="b7_departamento")
+    fecha = st.date_input("Fecha", datetime.date.today(), key="b7_fecha")
+    hora = st.time_input("Hora", key="b7_hora")
 
 with col2:
-    personal_actuante = st.text_area("Personal actuante")
-    dependencia = st.text_input("Dependencia")
-    movil = st.text_input("Móvil policial")
+    personal_actuante = st.text_area("Personal actuante", key="b7_personal_actuante")
+    dependencia = st.text_input("Dependencia", key="b7_dependencia")
+    movil = st.text_input("Móvil policial", key="b7_movil")
 
 st.write("---")
 
 tipo_secuestro = st.radio(
     "Tipo de secuestro",
     ["Secuestro de la causa", "Secuestro por depósito"],
-    horizontal=True
+    horizontal=True,
+    key="b7_tipo_secuestro"
 )
 
 formulario = st.selectbox(
     "Formulario a utilizar",
-    ["Elemento general", "Automóvil", "Motocicleta"]
+    ["Elemento general", "Automóvil", "Motocicleta"],
+    key="b7_formulario"
 )
 
-codigo = st.text_input("Código interno del secuestro", value="SEC-01")
+codigo = st.text_input("Código interno del secuestro", value=st.session_state.get("b7_codigo", "SEC-01"), key="b7_codigo")
 
 st.write("---")
 st.subheader("👤 Testigo de actuación")
@@ -183,23 +183,24 @@ st.subheader("👤 Testigo de actuación")
 tc1, tc2 = st.columns(2)
 
 with tc1:
-    testigo_nombre = st.text_input("Nombre y apellido del testigo")
-    testigo_dni = st.text_input("DNI del testigo")
-    testigo_correo = st.text_input("Correo electrónico del testigo")
+    testigo_nombre = st.text_input("Nombre y apellido del testigo", key="b7_testigo_nombre")
+    testigo_dni = st.text_input("DNI del testigo", key="b7_testigo_dni")
+    testigo_correo = st.text_input("Correo electrónico del testigo", key="b7_testigo_correo")
 
 with tc2:
-    testigo_domicilio = st.text_input("Domicilio del testigo")
-    testigo_telefono = st.text_input("Teléfono del testigo")
+    testigo_domicilio = st.text_input("Domicilio del testigo", key="b7_testigo_domicilio")
+    testigo_telefono = st.text_input("Teléfono del testigo", key="b7_testigo_telefono")
 
 st.write("---")
 st.subheader("📍 Lugar y motivo del secuestro")
 
-lugar_secuestro = st.text_area("Lugar exacto del secuestro")
+lugar_secuestro = st.text_area("Lugar exacto del secuestro", key="b7_lugar_secuestro")
 ubicacion_exacta = st.text_area(
     "Ubicación precisa del elemento",
-    placeholder="Ej: sobre mesa del comedor, debajo de cama, interior de baúl..."
+    placeholder="Ej: sobre mesa del comedor, debajo de cama, interior de baúl...",
+    key="b7_ubicacion_exacta"
 )
-motivo = st.text_area("Motivo del secuestro")
+motivo = st.text_area("Motivo del secuestro", key="b7_motivo")
 
 st.write("---")
 st.subheader("🔍 Descripción del elemento")
@@ -207,15 +208,17 @@ st.subheader("🔍 Descripción del elemento")
 descripcion = st.text_area(
     "Descripción policial del elemento secuestrado",
     height=150,
-    placeholder="Ej: Se procede al secuestro de..."
+    placeholder="Ej: Se procede al secuestro de...",
+    key="b7_descripcion"
 )
 
 estado = st.selectbox(
     "Estado general",
-    ["Bueno", "Regular", "Dañado", "Inutilizado", "Restos/Fragmentos", "No determinado"]
+    ["Bueno", "Regular", "Dañado", "Inutilizado", "Restos/Fragmentos", "No determinado"],
+    key="b7_estado"
 )
 
-destino = st.text_input("Destino / depósito", placeholder="Ej: Depósito Judicial / Seccional / Fiscalía")
+destino = st.text_input("Destino / depósito", placeholder="Ej: Depósito Judicial / Seccional / Fiscalía", key="b7_destino")
 
 texto_alerta = f"{descripcion} {formulario} {motivo} {ubicacion_exacta}"
 
@@ -255,17 +258,17 @@ if formulario == "Automóvil":
     a1, a2, a3 = st.columns(3)
 
     with a1:
-        auto_marca_modelo = st.text_input("Marca / Modelo")
-        auto_color = st.text_input("Color")
+        auto_marca_modelo = st.text_input("Marca / Modelo", key="b7_auto_marca_modelo")
+        auto_color = st.text_input("Color", key="b7_auto_color")
 
     with a2:
-        auto_dominio = st.text_input("Dominio / Patente")
-        auto_motor = st.text_input("Nro. Motor")
+        auto_dominio = st.text_input("Dominio / Patente", key="b7_auto_dominio")
+        auto_motor = st.text_input("Nro. Motor", key="b7_auto_motor")
 
     with a3:
-        auto_chasis = st.text_input("Nro. Chasis")
+        auto_chasis = st.text_input("Nro. Chasis", key="b7_auto_chasis")
 
-    auto_observaciones = st.text_area("Faltantes / estado / observaciones del automóvil")
+    auto_observaciones = st.text_area("Faltantes / estado / observaciones del automóvil", key="b7_auto_observaciones")
 
 if formulario == "Motocicleta":
     st.subheader("🏍️ Formulario especial: Motocicleta")
@@ -273,23 +276,23 @@ if formulario == "Motocicleta":
     m1, m2, m3 = st.columns(3)
 
     with m1:
-        moto_tipo_marca = st.text_input("Tipo / Marca")
-        moto_color = st.text_input("Color")
+        moto_tipo_marca = st.text_input("Tipo / Marca", key="b7_moto_tipo_marca")
+        moto_color = st.text_input("Color", key="b7_moto_color")
 
     with m2:
-        moto_dominio = st.text_input("Dominio")
-        moto_cilindrada = st.text_input("Cilindrada")
+        moto_dominio = st.text_input("Dominio", key="b7_moto_dominio")
+        moto_cilindrada = st.text_input("Cilindrada", key="b7_moto_cilindrada")
 
     with m3:
-        moto_motor = st.text_input("Nro. Motor")
-        moto_chasis = st.text_input("Nro. Chasis")
+        moto_motor = st.text_input("Nro. Motor", key="b7_moto_motor")
+        moto_chasis = st.text_input("Nro. Chasis", key="b7_moto_chasis")
 
-    moto_observaciones = st.text_area("Estado actual / observaciones de la motocicleta")
+    moto_observaciones = st.text_area("Estado actual / observaciones de la motocicleta", key="b7_moto_observaciones")
 
 st.write("---")
 st.subheader("📝 Observaciones finales")
 
-observaciones = st.text_area("Observaciones generales")
+observaciones = st.text_area("Observaciones generales", key="b7_observaciones")
 
 st.write("---")
 st.subheader("✍️ Firma digital del testigo")
@@ -425,3 +428,9 @@ if st.button("📄 GENERAR ACTA DE SECUESTRO COMPLETA"):
                 file_name="bloque_7.json",
                 mime="application/json"
             )
+
+# Guardado automático del bloque al finalizar la corrida
+try:
+    autoguardar_bloque(BLOQUE_ID)
+except Exception:
+    pass
