@@ -2,13 +2,11 @@ import streamlit as st
 import json
 from fpdf import FPDF
 
-# =====================================================
-# AUTOGUARDADO EN MEMORIA ENTRE BLOQUES
-# Evita que Streamlit borre datos al navegar entre paginas.
-# =====================================================
-for _k in list(st.session_state.keys()):
-    st.session_state[_k] = st.session_state[_k]
+from siv_guardado import iniciar_guardado_seguro, panel_guardado_seguro, autoguardar_bloque
 
+BLOQUE_ID = "BLOQUE_6_CROQUIS"
+iniciar_guardado_seguro(BLOQUE_ID)
+panel_guardado_seguro(BLOQUE_ID)
 
 # =====================================================
 # BLOQUE 6 - CROQUIS / RECEPCIÓN E IMPRESIÓN
@@ -36,7 +34,7 @@ def crear_pdf_final(imagen_croquis):
 st.title("Módulo de Recepción e Impresión - SVI")
 
 # 1. CARGA DEL ARCHIVO JSON (Generado por la IA con la inteligencia del hecho)
-archivo_json = st.file_uploader("Cargar JSON del hecho", type=['json'])
+archivo_json = st.file_uploader("Cargar JSON del hecho", type=['json'], key="b6_archivo_json")
 
 if archivo_json:
     try:
@@ -48,7 +46,7 @@ if archivo_json:
         st.info(f"Referencia: {archivo_json.name}")
 
         # 2. CARGA DEL CROQUIS (La imagen generada por la IA)
-        archivo_imagen = st.file_uploader("Cargar imagen del croquis (AI)", type=['png', 'jpg', 'jpeg'])
+        archivo_imagen = st.file_uploader("Cargar imagen del croquis (AI)", type=['png', 'jpg', 'jpeg'], key="b6_archivo_imagen")
 
         if archivo_imagen:
             # Vista previa del croquis para verificación del actante
@@ -81,3 +79,10 @@ if archivo_json:
 
 else:
     st.info("A la espera del archivo JSON del hecho para iniciar el bloque.")
+
+
+# Guardado automático del bloque al finalizar la corrida
+try:
+    autoguardar_bloque(BLOQUE_ID)
+except Exception:
+    pass
