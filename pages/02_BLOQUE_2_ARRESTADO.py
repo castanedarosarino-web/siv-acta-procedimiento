@@ -4,13 +4,11 @@ from datetime import datetime, date
 
 st.set_page_config(page_title="SVI - Bloque 2 Arrestado", layout="wide")
 
-# =====================================================
-# AUTOGUARDADO EN MEMORIA ENTRE BLOQUES
-# Evita que Streamlit borre datos al navegar entre paginas.
-# =====================================================
-for _k in list(st.session_state.keys()):
-    st.session_state[_k] = st.session_state[_k]
+from siv_guardado import iniciar_guardado_seguro, panel_guardado_seguro, autoguardar_bloque
 
+BLOQUE_ID = "BLOQUE_2_ARRESTADO"
+iniciar_guardado_seguro(BLOQUE_ID)
+panel_guardado_seguro(BLOQUE_ID)
 
 # =========================
 # ESTADO
@@ -241,3 +239,9 @@ st.download_button(
 
 with st.expander("Ver JSON"):
     st.code(json_data)
+
+# Guardado automático del bloque al finalizar la corrida
+try:
+    autoguardar_bloque(BLOQUE_ID)
+except Exception:
+    pass
