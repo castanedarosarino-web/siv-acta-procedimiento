@@ -6,13 +6,7 @@ import os
 import uuid
 from datetime import datetime, date
 from fpdf import FPDF
-
 from siv_guardado import iniciar_guardado_seguro, panel_guardado_seguro, autoguardar_bloque
-
-BLOQUE_ID = "BLOQUE_8_CONSTRUCTOR_INTELIGENTE"
-iniciar_guardado_seguro(BLOQUE_ID)
-panel_guardado_seguro(BLOQUE_ID)
-
 
 # =====================================================
 # S.I.V. - BLOQUE 8
@@ -36,10 +30,18 @@ panel_guardado_seguro(BLOQUE_ID)
 # =====================================================
 
 st.set_page_config(
-    page_title="S.I.V. - Bloque 8 Constructor Inteligente",
+    page_title="S.I.V. - Bloque 8 Constructor",
     page_icon="🚔",
     layout="wide"
 )
+
+# =====================================================
+# GUARDADO SEGURO DEL BLOQUE 8
+# Va después de st.set_page_config para evitar error de Streamlit.
+# =====================================================
+BLOQUE_ID = "BLOQUE_8_CONSTRUCTOR_INTELIGENTE"
+iniciar_guardado_seguro(BLOQUE_ID)
+panel_guardado_seguro(BLOQUE_ID)
 
 DB = "siv_bloque8_constructor.db"
 UPLOAD_DIR = "plantillas_subidas"
