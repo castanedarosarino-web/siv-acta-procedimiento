@@ -35,12 +35,6 @@ panel_guardado_seguro(BLOQUE_ID)
 # - Permite tomar foto/PDF como plantilla inicial.
 # =====================================================
 
-st.set_page_config(
-    page_title="S.I.V. - Bloque 8 Constructor Inteligente",
-    page_icon="🚔",
-    layout="wide"
-)
-
 DB = "siv_bloque8_constructor.db"
 UPLOAD_DIR = "plantillas_subidas"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
