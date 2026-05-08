@@ -11,12 +11,11 @@ from fpdf import FPDF
 
 st.set_page_config(page_title="SVI - Bloque 8 Consolidador", layout="wide", page_icon="📑")
 
-# =====================================================
-# AUTOGUARDADO EN MEMORIA ENTRE BLOQUES
-# Evita que Streamlit borre datos al navegar entre paginas.
-# =====================================================
-for _k in list(st.session_state.keys()):
-    st.session_state[_k] = st.session_state[_k]
+from siv_guardado import iniciar_guardado_seguro, panel_guardado_seguro, autoguardar_bloque
+
+BLOQUE_ID = "BLOQUE_8_CONSOLIDADOR"
+iniciar_guardado_seguro(BLOQUE_ID)
+panel_guardado_seguro(BLOQUE_ID)
 
 
 
@@ -353,7 +352,8 @@ if "bloque8_texto" not in st.session_state:
 archivos = st.file_uploader(
     "📥 Importar JSON generados por Bloques 1 a 7",
     type=["json"],
-    accept_multiple_files=True
+    accept_multiple_files=True,
+    key="b8_archivos_json"
 )
 
 if archivos:
@@ -402,7 +402,8 @@ if st.session_state.bloque8_datos:
     texto_editado = st.text_area(
         "Revise, corrija o complete el acta antes de generar PDF:",
         value=st.session_state.bloque8_texto,
-        height=520
+        height=520,
+        key="b8_texto_editable"
     )
     st.session_state.bloque8_texto = texto_editado
 
@@ -442,3 +443,8 @@ if st.session_state.bloque8_datos:
         st.json(st.session_state.bloque8_datos)
 else:
     st.info("Importe los JSON de los bloques para comenzar la consolidación.")
+# Guardado automático del bloque al finalizar la corrida
+try:
+    autoguardar_bloque(BLOQUE_ID)
+except Exception:
+    pass
