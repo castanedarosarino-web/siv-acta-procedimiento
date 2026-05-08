@@ -1,12 +1,10 @@
 import streamlit as st
 
-# =====================================================
-# AUTOGUARDADO EN MEMORIA ENTRE BLOQUES
-# Evita que Streamlit borre datos al navegar entre paginas.
-# =====================================================
-for _k in list(st.session_state.keys()):
-    st.session_state[_k] = st.session_state[_k]
+from siv_guardado import iniciar_guardado_seguro, panel_guardado_seguro, autoguardar_bloque
 
+BLOQUE_ID = "BLOQUE_5_CONSULTA"
+iniciar_guardado_seguro(BLOQUE_ID)
+panel_guardado_seguro(BLOQUE_ID)
 
 # =====================================================
 # BLOQUE 5 - CONSULTA
@@ -37,7 +35,8 @@ st.subheader("Auditor de Protocolo y Competencia Judicial")
 resena = st.text_area(
     "📝 Reseña del Hecho:",
     height=150,
-    placeholder="Ej: Personal comisionado arriba al lugar, constatando..."
+    placeholder="Ej: Personal comisionado arriba al lugar, constatando...",
+    key="b5_resena"
 )
 
 st.divider()
@@ -52,17 +51,20 @@ autoridad_interviniente = st.selectbox(
         "Fiscalía de Homicidios",
         "Fiscalía de Género / Integridad Sexual",
         "Justicia de Menores"
-    ]
+    ],
+    key="b5_autoridad_interviniente"
 )
 
 nombre_secretario = st.text_input(
-    "Nombre del Secretario/Fiscal que atendió:"
+    "Nombre del Secretario/Fiscal que atendió:",
+    key="b5_nombre_secretario"
 )
 
 directivas = st.text_area(
     "Directivas impartidas:",
     height=120,
-    placeholder="Ej: dispone consulta con fiscalía correspondiente, intervención de gabinete..."
+    placeholder="Ej: dispone consulta con fiscalía correspondiente, intervención de gabinete...",
+    key="b5_directivas"
 )
 
 competencia_correcta = True
@@ -122,3 +124,10 @@ if st.button("📄 FINALIZAR Y GENERAR BORRADOR"):
         }
 
         st.json(datos_consulta)
+
+
+# Guardado automático del bloque al finalizar la corrida
+try:
+    autoguardar_bloque(BLOQUE_ID)
+except Exception:
+    pass
